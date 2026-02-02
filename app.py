@@ -36,49 +36,82 @@ def extraer_texto(archivos_pdf):
             texto_completo += pagina.extract_text() or ""
     return texto_completo
 
-def generar_temario_ia(texto):
-    prompt = f"""
-    Eres un catedrático de Bachillerato experto en la asignatura. 
-    Tu objetivo es transcribir y explicar TODO el contenido de los apuntes adjuntos.
-    
-    REGLAS ESTRICTAS:
-    1. NO RESUMAS. Explica cada concepto detalladamente para que el alumno no tenga que volver a leer el PDF original.
-    2. DIVISIÓN CLARA: Si hay 6 archivos o conceptos distintos, crea al menos un tema por cada uno. No los mezcles.
-    3. FIDELIDAD: Si el PDF menciona nombres, fechas o datos específicos, DEBEN aparecer en la explicación.
-    4. CLARIDAD: Reescribe el lenguaje "difícil" del PDF a uno que un alumno entienda perfectamente, pero sin perder el rigor.
 
-    RESPONDE SOLO EN JSON:
+def generar_temario_ia(texto):
+    # Subimos a 18,000 caracteres. Si Groq da error, baja a 15,000.
+    prompt = f"""
+    Eres un Tutor de Excelencia para 2º de Bachillerato. Tu misión es generar apuntes que sustituyan por completo a los originales por su alto nivel de detalle.
+
+    REGLAS DE ORO PARA LA EXPLICACIÓN:
+    1. EXHAUSTIVIDAD TOTAL: No resumas. Si el PDF dice 10 cosas, tú explicas 10 cosas con todo su detalle.
+    2. ESTRUCTURA DE CADA TEMA: La explicación debe tener al menos 4 párrafos largos. Usa conectores lógicos, fechas, nombres propios y datos técnicos del PDF.
+    3. CERO OMISIONES: Está prohibido decir "en resumen", "etcétera" o "entre otros". Escribe todo el contenido.
+    4. CLARIDAD MAGISTRAL: Reescribe lo "imposible de entender" de forma que un alumno lo comprenda a la primera, pero manteniendo el vocabulario técnico necesario para el examen.
+    5. UN TEMA POR PDF: He subido varios archivos. Crea una entrada en el JSON para cada uno de ellos obligatoriamente.
+
+    FORMATO DE SALIDA (JSON ESTRICTO):
     {{
       "temas": [
         {{
-          "titulo": "Título específico del PDF",
-          "explicacion": "Explicación completa, extensa y sin dejarse detalles...",
-          "preguntas": ["...", "..."]
+          "titulo": "Título muy específico basado en el nombre del archivo",
+          "explicacion": "Escribe aquí una lección magistral EXTENSA (mínimo 500 palabras por tema). Incluye antecedentes, desarrollo y consecuencias. No te dejes nada del contenido original.",
+          "preguntas": ["Pregunta de desarrollo 1", "Pregunta de relación 2"]
         }}
       ]
     }}
-    Apuntes para procesar: {texto[:11000]}
+
+    CONTENIDO DE LOS APUNTES:
+    {texto[:18000]}
     """
     try:
         chat_completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
+            model="llama-3.3-70b-versatile",  # Este modelo es el que mejor sigue instrucciones largas
+            temperature=0.3,  # Bajamos la temperatura para que sea más fiel al texto y menos creativo
             response_format={"type": "json_object"}
         )
-        return json.loads(chat_completion.choices[0].message.content)["temas"]
+        data = json.loads(chat_completion.choices[0].message.content)
+        return data["temas"]
     except Exception as e:
-        st.error(f"Error IA: {e}")
+        st.error(f"Error con la IA: {e}")
         return []
 
 
 def calificar(pregunta, respuesta, contexto):
-    prompt = f"Califica esta respuesta de 0 a 10 basada en el texto. Responde JSON con 'nota', 'feedback' y 'olvidos'. Pregunta: {pregunta}. Respuesta: {respuesta}. Contexto: {contexto}"
-    completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="llama-3.3-70b-versatile",
-        response_format={"type": "json_object"}
-    )
-    return json.loads(completion.choices[0].message.content)
+    prompt = f"""
+    Actúa como un corrector de Selectividad (EBAU) extremadamente riguroso. 
+    Tu misión es comparar la respuesta del alumno con el contenido de los apuntes y detectar qué falta.
+
+    CRITERIOS DE EVALUACIÓN:
+    1. PRECISIÓN TÉCNICA: ¿Usa los términos clave del texto?
+    2. COMPLETITUD: ¿Ha respondido a todas las partes de la pregunta?
+    3. VACÍOS: Compara la respuesta con el "Contexto" y busca datos, fechas o conceptos que el alumno NO ha mencionado pero que son vitales.
+
+    CONTEXTO DE LOS APUNTES:
+    {contexto}
+
+    PREGUNTA: {pregunta}
+    RESPUESTA DEL ALUMNO: {respuesta}
+
+    RESPONDE ÚNICAMENTE EN JSON CON ESTA ESTRUCTURA:
+    {{
+      "nota": 0.0,
+      "feedback": "Análisis detallado de lo que está bien y lo que está regular.",
+      "olvidos": "Lista numerada de conceptos exactos, nombres o fechas que el alumno se ha dejado fuera.",
+      "consejo_oro": "Un truco específico para redactar mejor esta respuesta en un examen real."
+    }}
+    """
+    try:
+        completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+            temperature=0.2, # Muy baja para que no se invente nada
+            response_format={"type": "json_object"}
+        )
+        return json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        st.error(f"Error en la calificación: {e}")
+        return {"nota": 0, "feedback": "Error", "olvidos": "Error", "consejo_oro": "Reintentar"}
 
 
 # --- 4. INTERFAZ (SIDEBAR) ---
