@@ -37,19 +37,26 @@ def extraer_texto(archivos_pdf):
 
 def generar_temario_ia(texto):
     prompt = f"""
-    Eres un profesor de Bachillerato. Divide estos apuntes en temas coherentes.
-    Para cada tema, crea una explicación magistral y 2 preguntas.
+    Eres un catedrático de Bachillerato experto en la asignatura. 
+    Tu objetivo es transcribir y explicar TODO el contenido de los apuntes adjuntos.
+    
+    REGLAS ESTRICTAS:
+    1. NO RESUMAS. Explica cada concepto detalladamente para que el alumno no tenga que volver a leer el PDF original.
+    2. DIVISIÓN CLARA: Si hay 6 archivos o conceptos distintos, crea al menos un tema por cada uno. No los mezcles.
+    3. FIDELIDAD: Si el PDF menciona nombres, fechas o datos específicos, DEBEN aparecer en la explicación.
+    4. CLARIDAD: Reescribe el lenguaje "difícil" del PDF a uno que un alumno entienda perfectamente, pero sin perder el rigor.
+
     RESPONDE SOLO EN JSON:
     {{
       "temas": [
         {{
-          "titulo": "...",
-          "explicacion": "...",
+          "titulo": "Título específico del PDF",
+          "explicacion": "Explicación completa, extensa y sin dejarse detalles...",
           "preguntas": ["...", "..."]
         }}
       ]
     }}
-    Texto: {texto[:8000]}
+    Apuntes para procesar: {texto[:11000]}
     """
     try:
         chat_completion = client.chat.completions.create(
