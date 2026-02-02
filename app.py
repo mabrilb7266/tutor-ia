@@ -205,51 +205,55 @@ if st.session_state.temas:
                         st.balloons()
                         st.success("¡TEMARIO COMPLETADO!")
 
-                        # --- NUEVA SECCIÓN: MODO SIMULACRO PAU ---
+                        # --- SIMULADOR PAU: MODO DESARROLLO PURO ---
                         st.divider()
-                        st.header("🏁 Fase Final: Simulacro PAU")
-                        st.write(
-                            "¿Estás listo para el examen real? Te generaré una pregunta de desarrollo como las de la PAU.")
+                        st.header("🏁 Fase Final: Simulacro de Examen")
+                        st.write("Pulsa el botón para que el azar elija qué tema te toca desarrollar hoy.")
 
                         if "simulacro_pregunta" not in st.session_state:
-                            if st.button("🔥 Generar Examen Global"):
-                                with st.spinner("Eligiendo tema estrella..."):
-                                    todos_los_titulos = [t['titulo'] for t in st.session_state.temas]
-                                    res_sim = client.chat.completions.create(
-                                        model="llama-3.3-70b-versatile",
-                                        messages=[{"role": "user",
-                                                   "content": f"Elige el tema más importante de estos y lanza una pregunta de desarrollo tipo PAU: {todos_los_titulos}"}]
-                                    )
-                                    st.session_state.simulacro_pregunta = res_sim.choices[0].message.content
+                            if st.button("🎲 Sortear Tema de Examen"):
+                                with st.spinner("Eligiendo bola del bombo..."):
+                                    # Elegimos un título de tus temas guardados
+                                    import random
+
+                                    tema_elegido = random.choice(st.session_state.temas)
+                                    # Forzamos a la IA a que solo pida el desarrollo de ese título
+                                    st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {tema_elegido['titulo']}"
                                     st.rerun()
 
                         if "simulacro_pregunta" in st.session_state:
-                            st.warning(f"**ENUNCIADO:** {st.session_state.simulacro_pregunta}")
+                            st.error(f"### EXAMEN: {st.session_state.simulacro_pregunta}")
 
-                            # Cronómetro visual simple
-                            st.info("⏱️ **Recomendación:** Tienes 45 minutos para este tema.")
+                            st.info(
+                                "⏱️ **Tiempo sugerido:** 45-50 minutos. ¡No te olvides de la introducción y la conclusión!")
 
-                            resp_pau = st.text_area(
-                                "Escribe aquí tu desarrollo completo (Intro, Desarrollo, Conclusión):", height=300)
+                            resp_pau = st.text_area("Escribe aquí tu desarrollo completo:", height=400,
+                                                    placeholder="Empieza con una buena introducción...")
 
                             if st.button("⚖️ Entregar al Tribunal"):
-                                with st.spinner("Corrigiendo con rigor PAU..."):
+                                with st.spinner("Corrigiendo con rigor..."):
+                                    # Aquí la IA corrige comparando con lo que ella misma explicó antes
                                     prompt_pau = f"""
-                                                        Actúa como un corrector de Selectividad. Califica este desarrollo sobre 10.
-                                                        SE MUY ESTRICTO. 
-                                                        Evalúa: 
-                                                        1. Estructura (Intro, cuerpo, conclusión).
-                                                        2. Vocabulario técnico.
-                                                        3. Capacidad de síntesis y orden cronológico/lógico.
+                                                        Eres un corrector de Selectividad. El alumno ha tenido que desarrollar este tema: {st.session_state.simulacro_pregunta}.
 
-                                                        Pregunta: {st.session_state.simulacro_pregunta}
-                                                        Respuesta: {resp_pau}
+                                                        Utiliza estos apuntes como guía de corrección: {tema_elegido['explicacion']}
+
+                                                        EVALÚA:
+                                                        1. NOTA (0-10): Sé estricto.
+                                                        2. ESTRUCTURA: ¿Tiene introducción, cuerpo y conclusión?
+                                                        3. CONTENIDO: ¿Se ha dejado datos importantes que estaban en los apuntes?
+                                                        4. CONSEJO PARA EL 10: ¿Qué frase o dato exacto le falta para la nota máxima?
                                                         """
                                     final_res = client.chat.completions.create(
                                         model="llama-3.3-70b-versatile",
                                         messages=[{"role": "user", "content": prompt_pau}]
                                     )
-                                    st.markdown("### 📝 Dictamen del Tribunal")
+                                    st.markdown("---")
+                                    st.markdown("### 📝 Resultado del Examen")
                                     st.write(final_res.choices[0].message.content)
+
+                                    if st.button("🔄 Intentar con otro tema"):
+                                        del st.session_state.simulacro_pregunta
+                                        st.rerun()
 else:
     st.info("Sube tus apuntes en la barra lateral para empezar.")
