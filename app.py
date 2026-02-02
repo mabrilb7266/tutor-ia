@@ -202,7 +202,54 @@ if st.session_state.temas:
                         st.session_state.feedback = None
                         st.rerun()
                 else:
-                    st.balloons()
-                    st.success("¡Has completado todo el temario con éxito!")
+                        st.balloons()
+                        st.success("¡TEMARIO COMPLETADO!")
+
+                        # --- NUEVA SECCIÓN: MODO SIMULACRO PAU ---
+                        st.divider()
+                        st.header("🏁 Fase Final: Simulacro PAU")
+                        st.write(
+                            "¿Estás listo para el examen real? Te generaré una pregunta de desarrollo como las de la PAU.")
+
+                        if "simulacro_pregunta" not in st.session_state:
+                            if st.button("🔥 Generar Examen Global"):
+                                with st.spinner("Eligiendo tema estrella..."):
+                                    todos_los_titulos = [t['titulo'] for t in st.session_state.temas]
+                                    res_sim = client.chat.completions.create(
+                                        model="llama-3.3-70b-versatile",
+                                        messages=[{"role": "user",
+                                                   "content": f"Elige el tema más importante de estos y lanza una pregunta de desarrollo tipo PAU: {todos_los_titulos}"}]
+                                    )
+                                    st.session_state.simulacro_pregunta = res_sim.choices[0].message.content
+                                    st.rerun()
+
+                        if "simulacro_pregunta" in st.session_state:
+                            st.warning(f"**ENUNCIADO:** {st.session_state.simulacro_pregunta}")
+
+                            # Cronómetro visual simple
+                            st.info("⏱️ **Recomendación:** Tienes 45 minutos para este tema.")
+
+                            resp_pau = st.text_area(
+                                "Escribe aquí tu desarrollo completo (Intro, Desarrollo, Conclusión):", height=300)
+
+                            if st.button("⚖️ Entregar al Tribunal"):
+                                with st.spinner("Corrigiendo con rigor PAU..."):
+                                    prompt_pau = f"""
+                                                        Actúa como un corrector de Selectividad. Califica este desarrollo sobre 10.
+                                                        SE MUY ESTRICTO. 
+                                                        Evalúa: 
+                                                        1. Estructura (Intro, cuerpo, conclusión).
+                                                        2. Vocabulario técnico.
+                                                        3. Capacidad de síntesis y orden cronológico/lógico.
+
+                                                        Pregunta: {st.session_state.simulacro_pregunta}
+                                                        Respuesta: {resp_pau}
+                                                        """
+                                    final_res = client.chat.completions.create(
+                                        model="llama-3.3-70b-versatile",
+                                        messages=[{"role": "user", "content": prompt_pau}]
+                                    )
+                                    st.markdown("### 📝 Dictamen del Tribunal")
+                                    st.write(final_res.choices[0].message.content)
 else:
     st.info("Sube tus apuntes en la barra lateral para empezar.")
