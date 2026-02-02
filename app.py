@@ -205,55 +205,65 @@ if st.session_state.temas:
                         st.balloons()
                         st.success("¡TEMARIO COMPLETADO!")
 
-                        # --- SIMULADOR PAU: MODO DESARROLLO PURO ---
+                        # --- SIMULADOR PAU: MODO DESARROLLO PURO (CORREGIDO) ---
                         st.divider()
                         st.header("🏁 Fase Final: Simulacro de Examen")
                         st.write("Pulsa el botón para que el azar elija qué tema te toca desarrollar hoy.")
 
-                        if "simulacro_pregunta" not in st.session_state:
-                            if st.button("🎲 Sortear Tema de Examen"):
-                                with st.spinner("Eligiendo bola del bombo..."):
-                                    # Elegimos un título de tus temas guardados
-                                    import random
+                        if st.button("🎲 Sortear Tema de Examen"):
+                            with st.spinner("Eligiendo bola del bombo..."):
+                                import random
 
-                                    tema_elegido = random.choice(st.session_state.temas)
-                                    # Forzamos a la IA a que solo pida el desarrollo de ese título
-                                    st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {tema_elegido['titulo']}"
-                                    st.rerun()
+                                # Guardamos TODO el objeto del tema en la sesión
+                                st.session_state.tema_objeto_examen = random.choice(st.session_state.temas)
+                                st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {st.session_state.tema_objeto_examen['titulo']}"
+                                st.rerun()
 
+                        # Si ya hemos sorteado un tema, mostramos el examen
                         if "simulacro_pregunta" in st.session_state:
                             st.error(f"### EXAMEN: {st.session_state.simulacro_pregunta}")
-
                             st.info(
                                 "⏱️ **Tiempo sugerido:** 45-50 minutos. ¡No te olvides de la introducción y la conclusión!")
 
-                            resp_pau = st.text_area("Escribe aquí tu desarrollo completo:", height=400,
-                                                    placeholder="Empieza con una buena introducción...")
+                            # Usamos una clave única para el text_area
+                            resp_pau = st.text_area("Escribe aquí tu desarrollo completo:", height=400, key="input_pau")
 
                             if st.button("⚖️ Entregar al Tribunal"):
-                                with st.spinner("Corrigiendo con rigor..."):
-                                    # Aquí la IA corrige comparando con lo que ella misma explicó antes
-                                    prompt_pau = f"""
-                                                        Eres un corrector de Selectividad. El alumno ha tenido que desarrollar este tema: {st.session_state.simulacro_pregunta}.
+                                if len(resp_pau) < 50:
+                                    st.warning("Escribe un poco más, ¡que en la PAU hay que rellenar folios!")
+                                else:
+                                    with st.spinner("Corrigiendo con rigor..."):
+                                        # Recuperamos la explicación del tema guardado
+                                        contexto_examen = st.session_state.tema_objeto_examen['explicacion']
 
-                                                        Utiliza estos apuntes como guía de corrección: {tema_elegido['explicacion']}
+                                        prompt_pau = f"""
+                                                            Eres un corrector de Selectividad. El alumno ha desarrollado este tema: {st.session_state.simulacro_pregunta}.
+                                                            Usa estos apuntes de referencia: {contexto_examen}
 
-                                                        EVALÚA:
-                                                        1. NOTA (0-10): Sé estricto.
-                                                        2. ESTRUCTURA: ¿Tiene introducción, cuerpo y conclusión?
-                                                        3. CONTENIDO: ¿Se ha dejado datos importantes que estaban en los apuntes?
-                                                        4. CONSEJO PARA EL 10: ¿Qué frase o dato exacto le falta para la nota máxima?
-                                                        """
-                                    final_res = client.chat.completions.create(
-                                        model="llama-3.3-70b-versatile",
-                                        messages=[{"role": "user", "content": prompt_pau}]
-                                    )
-                                    st.markdown("---")
-                                    st.markdown("### 📝 Resultado del Examen")
-                                    st.write(final_res.choices[0].message.content)
+                                                            EVALÚA:
+                                                            1. NOTA (0-10).
+                                                            2. ESTRUCTURA: Intro, cuerpo y conclusión.
+                                                            3. CONTENIDO: ¿Faltan datos clave de los apuntes?
+                                                            4. EL CAMINO AL 10: ¿Qué detalle exacto le falta para la nota máxima?
+                                                            """
+                                        final_res = client.chat.completions.create(
+                                            model="llama-3.3-70b-versatile",
+                                            messages=[{"role": "user", "content": prompt_pau}]
+                                        )
+                                        st.session_state.resultado_pau = final_res.choices[0].message.content
 
-                                    if st.button("🔄 Intentar con otro tema"):
-                                        del st.session_state.simulacro_pregunta
-                                        st.rerun()
+                            # Si hay resultado, lo mostramos
+                            if "resultado_pau" in st.session_state:
+                                st.markdown("---")
+                                st.markdown("### 📝 Resultado del Examen")
+                                st.write(st.session_state.resultado_pau)
+
+                                if st.button("🔄 Intentar con otro tema"):
+                                    # Limpiamos la sesión para poder sortear de nuevo
+                                    del st.session_state.simulacro_pregunta
+                                    del st.session_state.tema_objeto_examen
+                                    if "resultado_pau" in st.session_state:
+                                        del st.session_state.resultado_pau
+                                    st.rerun()
 else:
     st.info("Sube tus apuntes en la barra lateral para empezar.")
