@@ -3,19 +3,18 @@ from groq import Groq
 import json
 from PyPDF2 import PdfReader
 
-# --- 1. CONFIGURACIÓN INICIAL ---
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Tutor Pro Bachillerato", page_icon="🎓", layout="wide")
 
-# Intentamos sacar la llave de los secretos (para la web) o de una variable local
+# Gestión de la API Key (Prioriza Secrets de Streamlit Cloud)
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
-    # Si lo pruebas en local y no tienes secretos, puedes pegarla aquí temporalmente
     api_key = "TU_LLAVE_DE_GROQ_AQUI"
 
 client = Groq(api_key=api_key)
 
-# --- 2. INICIALIZAR EL "CEREBRO" (SESSION STATE) ---
+# --- 2. ESTADO DE LA SESIÓN ---
 if "temas" not in st.session_state:
     st.session_state.temas = []
 if "indice_actual" not in st.session_state:
@@ -26,7 +25,7 @@ if "aprobado" not in st.session_state:
     st.session_state.aprobado = False
 
 
-# --- 3. FUNCIONES DE AYUDA ---
+# --- 3. FUNCIONES ---
 def extraer_texto(archivos_pdf):
     texto_completo = ""
     for pdf in archivos_pdf:
@@ -38,19 +37,19 @@ def extraer_texto(archivos_pdf):
 
 def generar_temario_ia(texto):
     prompt = f"""
-    Eres un profesor de Bachillerato español. Divide estos apuntes en temas coherentes.
-    Para cada tema, crea una explicación magistral y 2 preguntas de examen.
-    RESPONDE EXCLUSIVAMENTE EN JSON con esta estructura:
+    Eres un profesor de Bachillerato. Divide estos apuntes en temas coherentes.
+    Para cada tema, crea una explicación magistral y 2 preguntas.
+    RESPONDE SOLO EN JSON:
     {{
       "temas": [
         {{
-          "titulo": "Nombre del tema",
-          "explicacion": "Texto largo y detallado...",
-          "preguntas": ["Pregunta 1", "Pregunta 2"]
+          "titulo": "...",
+          "explicacion": "...",
+          "preguntas": ["...", "..."]
         }}
       ]
     }}
-    Apuntes: {texto[:8000]}
+    Texto: {texto[:8000]}
     """
     try:
         chat_completion = client.chat.completions.create(
@@ -58,99 +57,92 @@ def generar_temario_ia(texto):
             model="llama-3.3-70b-versatile",
             response_format={"type": "json_object"}
         )
-        data = json.loads(chat_completion.choices[0].message.content)
-        return data["temas"]
+        return json.loads(chat_completion.choices[0].message.content)["temas"]
     except Exception as e:
-        st.error(f"Error con la IA: {e}")
+        st.error(f"Error IA: {e}")
         return []
 
 
-def calificar_respuesta(pregunta, respuesta_alumno, contexto):
-    prompt = f"""
-    Actúa como corrector de Selectividad. Califica la respuesta sobre 10 basándote en los apuntes.
-    Pregunta: {pregunta}
-    Respuesta del alumno: {respuesta_alumno}
-    Apuntes originales: {contexto}
-
-    Responde en JSON con: "nota" (número), "feedback" (puntos fuertes y debilidades) y "olvidos" (conceptos clave que faltan).
-    """
-    chat_completion = client.chat.completions.create(
+def calificar(pregunta, respuesta, contexto):
+    prompt = f"Califica esta respuesta de 0 a 10 basada en el texto. Responde JSON con 'nota', 'feedback' y 'olvidos'. Pregunta: {pregunta}. Respuesta: {respuesta}. Contexto: {contexto}"
+    completion = client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
         model="llama-3.3-70b-versatile",
         response_format={"type": "json_object"}
     )
-    return json.loads(chat_completion.choices[0].message.content)
+    return json.loads(completion.choices[0].message.content)
 
 
-# --- 4. INTERFAZ DE USUARIO ---
-st.title("🎓 Tutor IA de Bachillerato")
-st.markdown("Sube tus apuntes y estudia tema a tema. ¡Solo pasarás si demuestras que sabes!")
-
-# Sidebar para subir archivos
+# --- 4. INTERFAZ (SIDEBAR) ---
 with st.sidebar:
-    st.header("📂 Tus Apuntes")
-    archivos = st.file_uploader("Sube uno o varios PDFs", type="pdf", accept_multiple_files=True)
-    if st.button("🚀 Empezar a Estudiar") and archivos:
-        with st.spinner("La IA está leyendo tus apuntes..."):
-            texto_extraido = extraer_texto(archivos)
-            st.session_state.temas = generar_temario_ia(texto_extraido)
+    st.header("📂 Apuntes")
+    archivos = st.file_uploader("Sube tus PDFs", type="pdf", accept_multiple_files=True)
+    if st.button("🚀 Iniciar Tutoría") and archivos:
+        with st.spinner("Procesando..."):
+            st.session_state.temas = generar_temario_ia(extraer_texto(archivos))
             st.session_state.indice_actual = 0
             st.session_state.feedback = None
-            st.session_state.aprobado = False
             st.rerun()
 
-# --- 5. LÓGICA DE ESTUDIO ---
+# --- 5. CUERPO PRINCIPAL ---
+st.title("🎓 Tutor IA Bachillerato")
+
 if st.session_state.temas:
     tema = st.session_state.temas[st.session_state.indice_actual]
 
     # Barra de progreso
-    total = len(st.session_state.temas)
-    progreso = (st.session_state.indice_actual + 1) / total
+    progreso = (st.session_state.indice_actual + 1) / len(st.session_state.temas)
     st.progress(progreso)
-    st.write(f"**Progreso: Tema {st.session_state.indice_actual + 1} de {total}**")
+    st.write(f"**Tema {st.session_state.indice_actual + 1} de {len(st.session_state.temas)}**")
 
-    # Mostrar contenido
-    st.subheader(f"Tema: {tema['titulo']}")
-    with st.expander("📖 Leer Explicación", expanded=True):
+    # PESTAÑAS: Aquí está el cambio ingenioso
+    tab_estudio, tab_examen = st.tabs(["📖 Estudiar", "📝 Examinarse"])
+
+    with tab_estudio:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader(tema['titulo'])
+        with col2:
+            if st.button("🆘 No entiendo nada"):
+                with st.spinner("Simplificando..."):
+                    res = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": f"Explica esto muy fácil: {tema['explicacion']}"}]
+                    )
+                    st.warning(res.choices[0].message.content)
+
         st.write(tema['explicacion'])
 
-    # Sección de evaluación
-    st.markdown("---")
-    st.write("### 📝 Examen rápido")
-    st.write(f"**Pregunta 1:** {tema['preguntas'][0]}")
-    st.write(f"**Pregunta 2:** {tema['preguntas'][1]}")
+    with tab_examen:
+        st.subheader("Cuestionario")
+        st.info(f"1. {tema['preguntas'][0]}")
+        st.info(f"2. {tema['preguntas'][1]}")
 
-    respuesta = st.text_area("Escribe aquí tus respuestas combinadas:",
-                             placeholder="Desarrolla tus respuestas lo mejor posible...")
+        resp_usuario = st.text_area("Tus respuestas:", key=f"area_{st.session_state.indice_actual}")
 
-    if st.button("📤 Enviar para Corregir"):
-        with st.spinner("Corrigiendo..."):
-            resultado = calificar_respuesta(tema['preguntas'], respuesta, tema['explicacion'])
-            st.session_state.feedback = resultado
-            st.session_state.aprobado = float(resultado["nota"]) >= 6.0
+        if st.button("Enviar Examen"):
+            with st.spinner("Corrigiendo..."):
+                resultado = calificar(tema['preguntas'], resp_usuario, tema['explicacion'])
+                st.session_state.feedback = resultado
+                st.session_state.aprobado = float(resultado["nota"]) >= 6.0
 
-    # Mostrar feedback si existe
-    if st.session_state.feedback:
-        fb = st.session_state.feedback
-        st.markdown(f"### Nota: {fb['nota']}/10")
+        if st.session_state.feedback:
+            fb = st.session_state.feedback
+            st.divider()
+            st.metric("Nota EBAU", f"{fb['nota']}/10")
 
-        if st.session_state.aprobado:
-            st.success(f"**¡Buen trabajo!** {fb['feedback']}")
-            st.info(f"**Lo que podrías mejorar:** {fb['olvidos']}")
-
-            if st.session_state.indice_actual < total - 1:
-                if st.button("Siguiente Tema ➡️"):
-                    st.session_state.indice_actual += 1
-                    st.session_state.feedback = None
-                    st.session_state.aprobado = False
-                    st.rerun()
+            if st.session_state.aprobado:
+                st.success(fb['feedback'])
+                if st.session_state.indice_actual < len(st.session_state.temas) - 1:
+                    if st.button("Siguiente Tema ➡️"):
+                        st.session_state.indice_actual += 1
+                        st.session_state.feedback = None
+                        st.rerun()
+                else:
+                    st.balloons()
+                    st.success("¡Curso completado!")
             else:
-                st.balloons()
-                st.success("¡Has terminado todos los apuntes! Estás listo para el examen.")
-        else:
-            st.error(f"**Necesitas repasar.** Nota mínima para pasar: 6.0")
-            st.warning(f"**Feedback:** {fb['feedback']}")
-            st.info(f"**Te ha faltado decir:** {fb['olvidos']}")
-
+                st.error(f"Nota insuficiente (mínimo 6). {fb['feedback']}")
+                st.info(f"Te faltó: {fb['olvidos']}")
 else:
-    st.info("Sube tus archivos PDF en la barra lateral para generar tu plan de estudio personalizado.")
+    st.info("Sube tus apuntes en la barra lateral para empezar.")
