@@ -28,12 +28,13 @@ if "aprobado" not in st.session_state:
 # --- 3. FUNCIONES ---
 def extraer_texto(archivos_pdf):
     texto_completo = ""
-    for pdf in archivos_pdf:
+    for idx, pdf in enumerate(archivos_pdf):
         lector = PdfReader(pdf)
+        # Marcador para que la IA sepa que cambia de archivo
+        texto_completo += f"\n\n--- INICIO DEL DOCUMENTO {idx+1}: {pdf.name} ---\n"
         for pagina in lector.pages:
             texto_completo += pagina.extract_text() or ""
     return texto_completo
-
 
 def generar_temario_ia(texto):
     prompt = f"""
