@@ -79,39 +79,38 @@ def generar_temario_ia(texto):
 
 def calificar(pregunta, respuesta, contexto):
     prompt = f"""
-    Actúa como un corrector de Selectividad (EBAU) extremadamente riguroso. 
-    Tu misión es comparar la respuesta del alumno con el contenido de los apuntes y detectar qué falta.
+    Actúa como un corrector de Selectividad de nivel máximo. Tu objetivo es ayudar al alumno a pasar del aprobado al 10 (la excelencia).
 
-    CRITERIOS DE EVALUACIÓN:
-    1. PRECISIÓN TÉCNICA: ¿Usa los términos clave del texto?
-    2. COMPLETITUD: ¿Ha respondido a todas las partes de la pregunta?
-    3. VACÍOS: Compara la respuesta con el "Contexto" y busca datos, fechas o conceptos que el alumno NO ha mencionado pero que son vitales.
+    CRITERIOS DE CORRECCIÓN:
+    1. RIGOR: ¿Faltan matices técnicos o vocabulario específico de los apuntes?
+    2. ESTRUCTURA: ¿La respuesta está bien hilada o es solo una lista de ideas?
+    3. EL CAMINO AL 10: Identifica exactamente qué detalle, dato o relación conceptual falta para que la nota sea perfecta.
 
-    CONTEXTO DE LOS APUNTES:
+    CONTEXTO DE REFERENCIA:
     {contexto}
 
     PREGUNTA: {pregunta}
     RESPUESTA DEL ALUMNO: {respuesta}
 
-    RESPONDE ÚNICAMENTE EN JSON CON ESTA ESTRUCTURA:
+    RESPONDE EXCLUSIVAMENTE EN JSON:
     {{
       "nota": 0.0,
-      "feedback": "Análisis detallado de lo que está bien y lo que está regular.",
-      "olvidos": "Lista numerada de conceptos exactos, nombres o fechas que el alumno se ha dejado fuera.",
-      "consejo_oro": "Un truco específico para redactar mejor esta respuesta en un examen real."
+      "feedback": "Análisis crítico de la respuesta actual.",
+      "olvidos": "Lista de datos o conceptos clave que se han omitido.",
+      "como_llegar_al_10": "Instrucciones específicas: qué términos añadir, qué frases mejorar o qué matiz incluir para la nota máxima."
     }}
     """
     try:
         completion = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.3-70b-versatile",
-            temperature=0.2, # Muy baja para que no se invente nada
+            temperature=0.2,
             response_format={"type": "json_object"}
         )
         return json.loads(completion.choices[0].message.content)
     except Exception as e:
         st.error(f"Error en la calificación: {e}")
-        return {"nota": 0, "feedback": "Error", "olvidos": "Error", "consejo_oro": "Reintentar"}
+        return {"nota": 0, "feedback": "Error", "olvidos": "Error", "como_llegar_al_10": "Reintentar"}
 
 
 # --- 4. INTERFAZ (SIDEBAR) ---
@@ -127,6 +126,8 @@ with st.sidebar:
 
 # --- 5. CUERPO PRINCIPAL ---
 st.title("🎓 Tutor IA Bachillerato")
+st.sidebar.markdown("---")
+st.sidebar.write(f"📖 **Temas cargados:** {len(st.session_state.temas)}")
 
 if st.session_state.temas:
     tema = st.session_state.temas[st.session_state.indice_actual]
@@ -170,10 +171,31 @@ if st.session_state.temas:
         if st.session_state.feedback:
             fb = st.session_state.feedback
             st.divider()
-            st.metric("Nota EBAU", f"{fb['nota']}/10")
 
-            if st.session_state.aprobado:
-                st.success(fb['feedback'])
+            # Nota y estado
+            nota = float(fb['nota'])
+            if nota >= 9:
+                st.balloons()
+                st.success(f"### Nota: {nota}/10 - ¡Casi la perfección!")
+            elif nota >= 6:
+                st.info(f"### Nota: {nota}/10 - Aprobado, pero puedes mejorar.")
+            else:
+                st.error(f"### Nota: {nota}/10 - Necesitas profundizar más.")
+
+            # Paneles de feedback
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("#### ✅ Lo que has hecho bien")
+                st.write(fb['feedback'])
+                st.markdown("#### ❌ Lo que has olvidado")
+                st.warning(fb['olvidos'])
+
+            with col_b:
+                st.markdown("#### 🔥 El Camino al 10")
+                st.success(fb['como_llegar_al_10'])
+
+            # Botón para avanzar si es apto
+            if nota >= 6.0:
                 if st.session_state.indice_actual < len(st.session_state.temas) - 1:
                     if st.button("Siguiente Tema ➡️"):
                         st.session_state.indice_actual += 1
@@ -181,9 +203,6 @@ if st.session_state.temas:
                         st.rerun()
                 else:
                     st.balloons()
-                    st.success("¡Curso completado!")
-            else:
-                st.error(f"Nota insuficiente (mínimo 6). {fb['feedback']}")
-                st.info(f"Te faltó: {fb['olvidos']}")
+                    st.success("¡Has completado todo el temario con éxito!")
 else:
     st.info("Sube tus apuntes en la barra lateral para empezar.")
