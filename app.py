@@ -138,6 +138,7 @@ if st.session_state.temas:
     st.write(f"**Tema {st.session_state.indice_actual + 1} de {len(st.session_state.temas)}**")
 
     # PESTAÑAS: Aquí está el cambio ingenioso
+        # 1. CREACIÓN DE PESTAÑAS
     tab_estudio, tab_examen = st.tabs(["📖 Estudiar", "📝 Examinarse"])
 
     with tab_estudio:
@@ -145,56 +146,85 @@ if st.session_state.temas:
         with col1:
             st.subheader(tema['titulo'])
         with col2:
-            if st.button("🆘 No entiendo nada"):
+            if st.button("🆘 No entiendo nada", key=f"sos_{st.session_state.indice_actual}"):
                 with st.spinner("Simplificando..."):
                     res = client.chat.completions.create(
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "user", "content": f"Explica esto muy fácil: {tema['explicacion']}"}]
                     )
                     st.warning(res.choices[0].message.content)
-
+        
         st.write(tema['explicacion'])
+        
+        # --- CHAT INTEGRADO EN EL TEMA ---
+        st.divider()
+        st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
+        
+        chat_key = f"chat_{st.session_state.indice_actual}"
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
+
+        for mensaje in st.session_state[chat_key]:
+            with st.chat_message(mensaje["role"]):
+                st.markdown(mensaje["content"])
+
+        if prompt_usuario := st.chat_input("¿Qué no te ha quedado claro?", key=f"input_{chat_key}"):
+            st.session_state[chat_key].append({"role": "user", "content": prompt_usuario})
+            with st.chat_message("user"):
+                st.markdown(prompt_usuario)
+
+            with st.chat_message("assistant"):
+                with st.spinner("Pensando..."):
+                    contexto_chat = f"Eres un tutor. Responde dudas sobre este tema específico: {tema['explicacion']}. Duda del alumno: {prompt_usuario}"
+                    respuesta = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": contexto_chat}]
+                    )
+                    full_response = respuesta.choices[0].message.content
+                    st.markdown(full_response)
+            st.session_state[chat_key].append({"role": "assistant", "content": full_response})
 
     with tab_examen:
-        st.subheader("Cuestionario")
+        st.subheader("🏁 Recta Final antes del Examen")
+        
+        # --- CHECKLIST DE ÚLTIMA HORA ---
+        with st.expander("🔍 REPASO EXPRESS", expanded=False):
+            if st.button("✨ Generar Checklist de Oro", key=f"btn_check_{st.session_state.indice_actual}"):
+                with st.spinner("Extrayendo lo vital..."):
+                    prompt_check = f"Basándote en este tema: {tema['explicacion']}, dime los 5 conceptos o datos exactos que suelen preguntar. Sé muy breve."
+                    res_check = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": prompt_check}]
+                    )
+                    st.session_state[f"checklist_{st.session_state.indice_actual}"] = res_check.choices[0].message.content
+            
+            if f"checklist_{st.session_state.indice_actual}" in st.session_state:
+                st.info(st.session_state[f"checklist_{st.session_state.indice_actual}"])
+
+        st.divider()
+        st.subheader("📝 Cuestionario")
         st.info(f"1. {tema['preguntas'][0]}")
         st.info(f"2. {tema['preguntas'][1]}")
 
         resp_usuario = st.text_area("Tus respuestas:", key=f"area_{st.session_state.indice_actual}")
 
-        if st.button("Enviar Examen"):
+        if st.button("Enviar Examen", key=f"env_{st.session_state.indice_actual}"):
             with st.spinner("Corrigiendo..."):
                 resultado = calificar(tema['preguntas'], resp_usuario, tema['explicacion'])
                 st.session_state.feedback = resultado
-                st.session_state.aprobado = float(resultado["nota"]) >= 6.0
 
         if st.session_state.feedback:
             fb = st.session_state.feedback
-            st.divider()
-
-            # Nota y estado
             nota = float(fb['nota'])
-            if nota >= 9:
-                st.balloons()
-                st.success(f"### Nota: {nota}/10 - ¡Casi la perfección!")
-            elif nota >= 6:
-                st.info(f"### Nota: {nota}/10 - Aprobado, pero puedes mejorar.")
-            else:
-                st.error(f"### Nota: {nota}/10 - Necesitas profundizar más.")
-
-            # Paneles de feedback
+            st.markdown(f"### Nota: {nota}/10")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.markdown("#### ✅ Lo que has hecho bien")
+                st.markdown("#### ✅ Feedback")
                 st.write(fb['feedback'])
-                st.markdown("#### ❌ Lo que has olvidado")
-                st.warning(fb['olvidos'])
-
             with col_b:
                 st.markdown("#### 🔥 El Camino al 10")
                 st.success(fb['como_llegar_al_10'])
 
-            # Botón para avanzar si es apto
             if nota >= 6.0:
                 if st.session_state.indice_actual < len(st.session_state.temas) - 1:
                     if st.button("Siguiente Tema ➡️"):
@@ -202,68 +232,28 @@ if st.session_state.temas:
                         st.session_state.feedback = None
                         st.rerun()
                 else:
-                        st.balloons()
-                        st.success("¡TEMARIO COMPLETADO!")
+                    st.balloons()
+                    st.success("¡TEMARIO COMPLETADO!")
+                    
+                    # --- SIMULADOR PAU FINAL ---
+                    st.divider()
+                    if st.button("🎲 Sortear Tema de Examen Global"):
+                        import random
+                        st.session_state.tema_objeto_examen = random.choice(st.session_state.temas)
+                        st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {st.session_state.tema_objeto_examen['titulo']}"
+                        st.rerun()
 
-                        # --- SIMULADOR PAU: MODO DESARROLLO PURO (CORREGIDO) ---
-                        st.divider()
-                        st.header("🏁 Fase Final: Simulacro de Examen")
-                        st.write("Pulsa el botón para que el azar elija qué tema te toca desarrollar hoy.")
+                    if "simulacro_pregunta" in st.session_state:
+                        st.error(f"### EXAMEN: {st.session_state.simulacro_pregunta}")
+                        resp_pau = st.text_area("Desarrollo completo:", height=300, key="input_pau")
+                        if st.button("⚖️ Entregar al Tribunal"):
+                            with st.spinner("Calificando..."):
+                                prompt_pau = f"Corrige este examen de Selectividad: {st.session_state.simulacro_pregunta}. Respuesta: {resp_pau}. Referencia: {st.session_state.tema_objeto_examen['explicacion']}"
+                                final_res = client.chat.completions.create(
+                                    model="llama-3.3-70b-versatile",
+                                    messages=[{"role": "user", "content": prompt_pau}]
+                                )
+                                st.session_state.resultado_pau = final_res.choices[0].message.content
 
-                        if st.button("🎲 Sortear Tema de Examen"):
-                            with st.spinner("Eligiendo bola del bombo..."):
-                                import random
-
-                                # Guardamos TODO el objeto del tema en la sesión
-                                st.session_state.tema_objeto_examen = random.choice(st.session_state.temas)
-                                st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {st.session_state.tema_objeto_examen['titulo']}"
-                                st.rerun()
-
-                        # Si ya hemos sorteado un tema, mostramos el examen
-                        if "simulacro_pregunta" in st.session_state:
-                            st.error(f"### EXAMEN: {st.session_state.simulacro_pregunta}")
-                            st.info(
-                                "⏱️ **Tiempo sugerido:** 45-50 minutos. ¡No te olvides de la introducción y la conclusión!")
-
-                            # Usamos una clave única para el text_area
-                            resp_pau = st.text_area("Escribe aquí tu desarrollo completo:", height=400, key="input_pau")
-
-                            if st.button("⚖️ Entregar al Tribunal"):
-                                if len(resp_pau) < 50:
-                                    st.warning("Escribe un poco más, ¡que en la PAU hay que rellenar folios!")
-                                else:
-                                    with st.spinner("Corrigiendo con rigor..."):
-                                        # Recuperamos la explicación del tema guardado
-                                        contexto_examen = st.session_state.tema_objeto_examen['explicacion']
-
-                                        prompt_pau = f"""
-                                                            Eres un corrector de Selectividad. El alumno ha desarrollado este tema: {st.session_state.simulacro_pregunta}.
-                                                            Usa estos apuntes de referencia: {contexto_examen}
-
-                                                            EVALÚA:
-                                                            1. NOTA (0-10).
-                                                            2. ESTRUCTURA: Intro, cuerpo y conclusión.
-                                                            3. CONTENIDO: ¿Faltan datos clave de los apuntes?
-                                                            4. EL CAMINO AL 10: ¿Qué detalle exacto le falta para la nota máxima?
-                                                            """
-                                        final_res = client.chat.completions.create(
-                                            model="llama-3.3-70b-versatile",
-                                            messages=[{"role": "user", "content": prompt_pau}]
-                                        )
-                                        st.session_state.resultado_pau = final_res.choices[0].message.content
-
-                            # Si hay resultado, lo mostramos
-                            if "resultado_pau" in st.session_state:
-                                st.markdown("---")
-                                st.markdown("### 📝 Resultado del Examen")
-                                st.write(st.session_state.resultado_pau)
-
-                                if st.button("🔄 Intentar con otro tema"):
-                                    # Limpiamos la sesión para poder sortear de nuevo
-                                    del st.session_state.simulacro_pregunta
-                                    del st.session_state.tema_objeto_examen
-                                    if "resultado_pau" in st.session_state:
-                                        del st.session_state.resultado_pau
-                                    st.rerun()
-else:
-    st.info("Sube tus apuntes en la barra lateral para empezar.")
+                        if "resultado_pau" in st.session_state:
+                            st.info(st.session_state.resultado_pau)
