@@ -154,55 +154,36 @@ if st.session_state.temas:
                     st.warning(res.choices[0].message.content)
 
         st.write(tema['explicacion'])
-        # --- GENERADOR DE MAPA MENTAL (VERSIÓN ANTI-ERRORES) ---
+        # --- GENERADOR DE ESQUEMA ESTRUCTURAL (EL QUE NUNCA FALLA) ---
         st.divider()
-        if st.button("🗺️ Generar Mapa Mental Visual"):
-            with st.spinner("Dibujando esquema..."):
-                # 1. Prompt ultra-estricto para evitar caracteres raros
+        if st.button("🗺️ Generar Esquema Visual del Tema"):
+            with st.spinner("Estructurando conceptos clave..."):
                 prompt_mapa = f"""
-                        Crea un esquema conceptual simple en Mermaid (graph TD).
-                        Tema: {tema['titulo']}
-                        Contenido: {tema['explicacion'][:1000]}
-                        REGLAS CRÍTICAS:
-                        - NO uses acentos, ni eñes, ni símbolos como ( ), >, <, / o | dentro de los nodos.
-                        - Usa solo letras A-Z y espacios.
-                        - Formato: A[Concepto 1] --> B[Concepto 2]
-                        - Responde SOLO con el código, sin ```mermaid.
+                        Eres un experto en síntesis visual para Bachillerato. 
+                        Crea un esquema jerárquico del tema: {tema['titulo']}.
+
+                        Usa este formato exactamente:
+                        # 📌 [TÍTULO]
+                        ## 1. [Apartado Principal]
+                        - 🔹 **Concepto Clave**: Explicación breve.
+                        - 🔹 **Concepto Clave**: Explicación breve.
+
+                        ## 2. [Siguiente Apartado]
+                        ...
+
+                        Usa flechas (➡️) para conectar causas y consecuencias.
+                        Contenido: {tema['explicacion'][:1500]}
                         """
                 res_mapa = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt_mapa}]
                 )
 
-                # 2. Limpieza de seguridad del código recibido
-                raw_code = res_mapa.choices[0].message.content
-                clean_code = raw_code.replace("```mermaid", "").replace("```", "").strip()
+                # Mostramos el esquema en un contenedor bonito
+                st.markdown("### 📍 Guion Estructural para el Examen")
+                st.container(border=True).markdown(res_mapa.choices[0].message.content)
 
-                # 3. Codificación segura para URL
-                import base64
-
-
-                def generar_url_mermaid(graph_code):
-                    # Eliminamos saltos de línea y espacios extra para la URL
-                    compact_code = " ".join(graph_code.split())
-                    graphbytes = compact_code.encode("utf8")
-                    base64_bytes = base64.b64encode(graphbytes)
-                    base64_string = base64_bytes.decode("ascii")
-                    return "[https://mermaid.ink/img/](https://mermaid.ink/img/)" + base64_string
-
-
-                try:
-                    url_imagen = generar_url_mermaid(clean_code)
-                    # Mostramos la imagen con un diseño más limpio
-                    st.markdown(f"""
-                            <div style="text-align: center; background: white; padding: 10px; border-radius: 10px">
-                                <img src="{url_imagen}" style="max-width: 100%;">
-                            </div>
-                            """, unsafe_allow_html=True)
-                    st.caption(
-                        "💡 Consejo: Si el mapa sale pequeño, haz clic derecho y 'Abrir imagen en pestaña nueva'.")
-                except Exception as e:
-                    st.error("Error al renderizar el mapa. Inténtalo de nuevo.")
+                st.caption("☝️ Este esquema es el 'esqueleto' que debes seguir para desarrollar el tema en la PAU.")
         # --- CHAT INTEGRADO EN EL TEMA ---
         st.divider()
         st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
