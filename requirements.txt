@@ -1,3 +1,4 @@
 streamlit
 groq
+streamlit-mermaid
 PyPDF2
