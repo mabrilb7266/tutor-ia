@@ -154,33 +154,48 @@ if st.session_state.temas:
                     st.warning(res.choices[0].message.content)
 
         st.write(tema['explicacion'])
-        # --- GENERADOR DE ESQUEMA VISUAL ---
+        # --- GENERADOR DE MAPA MENTAL (VERSIÓN PRO) ---
         st.divider()
-        if st.button("🗺️ Generar Mapa Mental del Tema"):
+        if st.button("🗺️ Generar Mapa Mental Visual"):
             with st.spinner("Dibujando esquema..."):
+                # Pedimos a la IA el código Mermaid puro
                 prompt_mapa = f"""
-                        Crea un esquema conceptual del siguiente tema usando sintaxis de Mermaid (graph TD).
-                        Usa conceptos breves. Estructura: Título -> Apartados principales -> Detalles clave.
+                        Crea un esquema conceptual usando sintaxis de Mermaid (graph TD).
                         Tema: {tema['titulo']}
                         Contenido: {tema['explicacion'][:1000]}
-                        Responde SOLO con el código Mermaid, sin explicaciones.
+                        Reglas: 
+                        1. Usa conceptos muy breves (2-3 palabras).
+                        2. Responde SOLO con el código Mermaid.
+                        3. No uses paréntesis ni caracteres especiales dentro de las cajas [ ].
                         """
                 res_mapa = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt_mapa}]
                 )
-                codigo_mermaid = res_mapa.choices[0].message.content.replace("```mermaid", "").replace("```", "")
-                st.markdown(f"""
-                        <div style="background-color: white; padding: 20px; border-radius: 10px;">
-                            <pre class="mermaid">
-                            {codigo_mermaid}
-                            </pre>
-                        </div>
-                        <script type="module">
-                            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                            mermaid.initialize({{ startOnLoad: true }});
-                        </script>
-                        """, unsafe_allow_html=True)
+
+                codigo_mermaid = res_mapa.choices[0].message.content.replace("```mermaid", "").replace("```",
+                                                                                                       "").strip()
+
+                # Usamos la API de Kroki.io o Mermaid.ink para convertir el código en imagen
+                import base64
+
+
+                def generar_url_mermaid(graph_code):
+                    graphbytes = graph_code.encode("ascii")
+                    base64_bytes = base64.b64encode(graphbytes)
+                    base64_string = base64_bytes.decode("ascii")
+                    return "https://mermaid.ink/img/" + base64_string
+
+
+                try:
+                    url_imagen = generar_url_mermaid(codigo_mermaid)
+                    st.image(url_imagen, caption="Mapa Mental del Tema", use_container_width=True)
+
+                    # Opción para descargar la imagen
+                    st.write(f"[🔗 Abrir imagen en grande]({url_imagen})")
+                except Exception as e:
+                    st.error("No se pudo generar el gráfico. Aquí tienes el esquema en texto:")
+                    st.code(codigo_mermaid)
         # --- CHAT INTEGRADO EN EL TEMA ---
         st.divider()
         st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
