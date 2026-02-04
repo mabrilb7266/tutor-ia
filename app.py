@@ -154,7 +154,33 @@ if st.session_state.temas:
                     st.warning(res.choices[0].message.content)
 
         st.write(tema['explicacion'])
-
+        # --- GENERADOR DE ESQUEMA VISUAL ---
+        st.divider()
+        if st.button("🗺️ Generar Mapa Mental del Tema"):
+            with st.spinner("Dibujando esquema..."):
+                prompt_mapa = f"""
+                        Crea un esquema conceptual del siguiente tema usando sintaxis de Mermaid (graph TD).
+                        Usa conceptos breves. Estructura: Título -> Apartados principales -> Detalles clave.
+                        Tema: {tema['titulo']}
+                        Contenido: {tema['explicacion'][:1000]}
+                        Responde SOLO con el código Mermaid, sin explicaciones.
+                        """
+                res_mapa = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt_mapa}]
+                )
+                codigo_mermaid = res_mapa.choices[0].message.content.replace("```mermaid", "").replace("```", "")
+                st.markdown(f"""
+                        <div style="background-color: white; padding: 20px; border-radius: 10px;">
+                            <pre class="mermaid">
+                            {codigo_mermaid}
+                            </pre>
+                        </div>
+                        <script type="module">
+                            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+                            mermaid.initialize({{ startOnLoad: true }});
+                        </script>
+                        """, unsafe_allow_html=True)
         # --- CHAT INTEGRADO EN EL TEMA ---
         st.divider()
         st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
