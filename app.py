@@ -137,8 +137,7 @@ if st.session_state.temas:
     st.progress(progreso)
     st.write(f"**Tema {st.session_state.indice_actual + 1} de {len(st.session_state.temas)}**")
 
-    # PESTAÑAS: Aquí está el cambio ingenioso
-        # 1. CREACIÓN DE PESTAÑAS
+    # 1. CREACIÓN DE PESTAÑAS
     tab_estudio, tab_examen = st.tabs(["📖 Estudiar", "📝 Examinarse"])
 
     with tab_estudio:
@@ -153,13 +152,13 @@ if st.session_state.temas:
                         messages=[{"role": "user", "content": f"Explica esto muy fácil: {tema['explicacion']}"}]
                     )
                     st.warning(res.choices[0].message.content)
-        
+
         st.write(tema['explicacion'])
-        
+
         # --- CHAT INTEGRADO EN EL TEMA ---
         st.divider()
         st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
-        
+
         chat_key = f"chat_{st.session_state.indice_actual}"
         if chat_key not in st.session_state:
             st.session_state[chat_key] = []
@@ -186,7 +185,7 @@ if st.session_state.temas:
 
     with tab_examen:
         st.subheader("🏁 Recta Final antes del Examen")
-        
+
         # --- CHECKLIST DE ÚLTIMA HORA ---
         with st.expander("🔍 REPASO EXPRESS", expanded=False):
             if st.button("✨ Generar Checklist de Oro", key=f"btn_check_{st.session_state.indice_actual}"):
@@ -196,8 +195,9 @@ if st.session_state.temas:
                         model="llama-3.3-70b-versatile",
                         messages=[{"role": "user", "content": prompt_check}]
                     )
-                    st.session_state[f"checklist_{st.session_state.indice_actual}"] = res_check.choices[0].message.content
-            
+                    st.session_state[f"checklist_{st.session_state.indice_actual}"] = res_check.choices[
+                        0].message.content
+
             if f"checklist_{st.session_state.indice_actual}" in st.session_state:
                 st.info(st.session_state[f"checklist_{st.session_state.indice_actual}"])
 
@@ -234,11 +234,12 @@ if st.session_state.temas:
                 else:
                     st.balloons()
                     st.success("¡TEMARIO COMPLETADO!")
-                    
+
                     # --- SIMULADOR PAU FINAL ---
                     st.divider()
                     if st.button("🎲 Sortear Tema de Examen Global"):
                         import random
+
                         st.session_state.tema_objeto_examen = random.choice(st.session_state.temas)
                         st.session_state.simulacro_pregunta = f"Desarrolle el siguiente tema: {st.session_state.tema_objeto_examen['titulo']}"
                         st.rerun()
@@ -257,3 +258,5 @@ if st.session_state.temas:
 
                         if "resultado_pau" in st.session_state:
                             st.info(st.session_state.resultado_pau)
+else:
+    st.info("Sube tus apuntes en la barra lateral para empezar.")
