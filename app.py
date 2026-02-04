@@ -154,48 +154,55 @@ if st.session_state.temas:
                     st.warning(res.choices[0].message.content)
 
         st.write(tema['explicacion'])
-        # --- GENERADOR DE MAPA MENTAL (VERSIÓN PRO) ---
+        # --- GENERADOR DE MAPA MENTAL (VERSIÓN ANTI-ERRORES) ---
         st.divider()
         if st.button("🗺️ Generar Mapa Mental Visual"):
             with st.spinner("Dibujando esquema..."):
-                # Pedimos a la IA el código Mermaid puro
+                # 1. Prompt ultra-estricto para evitar caracteres raros
                 prompt_mapa = f"""
-                        Crea un esquema conceptual usando sintaxis de Mermaid (graph TD).
+                        Crea un esquema conceptual simple en Mermaid (graph TD).
                         Tema: {tema['titulo']}
                         Contenido: {tema['explicacion'][:1000]}
-                        Reglas: 
-                        1. Usa conceptos muy breves (2-3 palabras).
-                        2. Responde SOLO con el código Mermaid.
-                        3. No uses paréntesis ni caracteres especiales dentro de las cajas [ ].
+                        REGLAS CRÍTICAS:
+                        - NO uses acentos, ni eñes, ni símbolos como ( ), >, <, / o | dentro de los nodos.
+                        - Usa solo letras A-Z y espacios.
+                        - Formato: A[Concepto 1] --> B[Concepto 2]
+                        - Responde SOLO con el código, sin ```mermaid.
                         """
                 res_mapa = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": prompt_mapa}]
                 )
 
-                codigo_mermaid = res_mapa.choices[0].message.content.replace("```mermaid", "").replace("```",
-                                                                                                       "").strip()
+                # 2. Limpieza de seguridad del código recibido
+                raw_code = res_mapa.choices[0].message.content
+                clean_code = raw_code.replace("```mermaid", "").replace("```", "").strip()
 
-                # Usamos la API de Kroki.io o Mermaid.ink para convertir el código en imagen
+                # 3. Codificación segura para URL
                 import base64
 
 
                 def generar_url_mermaid(graph_code):
-                    graphbytes = graph_code.encode("ascii")
+                    # Eliminamos saltos de línea y espacios extra para la URL
+                    compact_code = " ".join(graph_code.split())
+                    graphbytes = compact_code.encode("utf8")
                     base64_bytes = base64.b64encode(graphbytes)
                     base64_string = base64_bytes.decode("ascii")
-                    return "https://mermaid.ink/img/" + base64_string
+                    return "[https://mermaid.ink/img/](https://mermaid.ink/img/)" + base64_string
 
 
                 try:
-                    url_imagen = generar_url_mermaid(codigo_mermaid)
-                    st.image(url_imagen, caption="Mapa Mental del Tema", use_container_width=True)
-
-                    # Opción para descargar la imagen
-                    st.write(f"[🔗 Abrir imagen en grande]({url_imagen})")
+                    url_imagen = generar_url_mermaid(clean_code)
+                    # Mostramos la imagen con un diseño más limpio
+                    st.markdown(f"""
+                            <div style="text-align: center; background: white; padding: 10px; border-radius: 10px">
+                                <img src="{url_imagen}" style="max-width: 100%;">
+                            </div>
+                            """, unsafe_allow_html=True)
+                    st.caption(
+                        "💡 Consejo: Si el mapa sale pequeño, haz clic derecho y 'Abrir imagen en pestaña nueva'.")
                 except Exception as e:
-                    st.error("No se pudo generar el gráfico. Aquí tienes el esquema en texto:")
-                    st.code(codigo_mermaid)
+                    st.error("Error al renderizar el mapa. Inténtalo de nuevo.")
         # --- CHAT INTEGRADO EN EL TEMA ---
         st.divider()
         st.markdown("### 💬 Pregúntale a tu Tutor sobre este tema")
